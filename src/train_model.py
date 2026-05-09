@@ -10,6 +10,8 @@ import joblib
 import os
 import optuna
 from sklearn.model_selection import StratifiedKFold
+import mlflow
+
 
 
 def objective(x, y, trial):
@@ -39,12 +41,20 @@ def train_model(x, y, best_params):
     model = XGBClassifier(scale_pos_weight=weight, **param)
     cv_scores = cross_val_score(model, X_train, Y_train, cv=5, scoring="f1")
     model.fit(X_train, Y_train)
+    mlflow.set_experiment("churn_prediction")
+
+    with mlflow.start_run():
+        mlflow.log_params(best_params)
+        mlflow.log_metric("f1", cv_scores.mean())
+        mlflow.xgboost.log_model(model, "xgb_model")
+
 
     Y_pred = model.predict(X_test)
     print(classification_report(Y_test, Y_pred))
     print("Cross-validation F1 scores:", cv_scores)
     os.makedirs("models", exist_ok=True)
     joblib.dump(model, "models/xgb_model.joblib")
+    return Y_test, Y_pred
 
 
 if __name__ == "__main__":
@@ -55,3 +65,4 @@ if __name__ == "__main__":
     best_params = study.best_params
     print("Best Hyperparameters:", best_params)
     train_model(x, y, best_params)
+    
